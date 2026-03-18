@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { lazy, Suspense, useContext, useMemo } from 'react';
-import { Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import Loading from './components/common/ui/Loading';
 import User from './pages/User';
 import { AuthRedirect, PrivateRoute, AdminRoute } from './helpers';
@@ -87,15 +87,33 @@ function App() {
     return false; // 默认不需要登录
   }, [statusState?.status?.HeaderNavModules]);
 
+  // 检查首页是否被禁用
+  const homeDisabled = useMemo(() => {
+    const headerNavModulesConfig = statusState?.status?.HeaderNavModules;
+    if (headerNavModulesConfig) {
+      try {
+        const modules = JSON.parse(headerNavModulesConfig);
+        return modules.home === false;
+      } catch (error) {
+        return false;
+      }
+    }
+    return false;
+  }, [statusState?.status?.HeaderNavModules]);
+
   return (
     <SetupCheck>
       <Routes>
         <Route
           path='/'
           element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-              <Home />
-            </Suspense>
+            homeDisabled ? (
+              <Navigate to='/console' replace />
+            ) : (
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <Home />
+              </Suspense>
+            )
           }
         />
         <Route
