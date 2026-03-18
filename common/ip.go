@@ -1,6 +1,17 @@
 package common
 
-import "net"
+import (
+	"context"
+	"net"
+)
+
+var defaultDialer = &net.Dialer{}
+
+// DialIPv4Only forces TCP connections to use IPv4 only.
+// Use this as http.Transport.DialContext to avoid IPv6 in Go's pure-Go resolver.
+func DialIPv4Only(ctx context.Context, network, addr string) (net.Conn, error) {
+	return defaultDialer.DialContext(ctx, "tcp4", addr)
+}
 
 func IsIP(s string) bool {
 	ip := net.ParseIP(s)
