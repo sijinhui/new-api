@@ -34,7 +34,7 @@ const (
 	floatEpsilon                = 1e-9
 	officialRatioPresetID       = -100
 	officialRatioPresetName     = "官方倍率预设"
-	officialRatioPresetBaseURL  = "https://basellm.github.io"
+	officialRatioPresetBaseURL  = "https://proxy.xiaosi.cc/basellm.github.io"
 	modelsDevPresetID           = -101
 	modelsDevPresetName         = "models.dev 价格预设"
 	modelsDevPresetBaseURL      = "https://models.dev"

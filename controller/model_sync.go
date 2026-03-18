@@ -22,8 +22,8 @@ import (
 
 // 上游地址
 const (
-	upstreamModelsURL  = "https://basellm.github.io/llm-metadata/api/newapi/models.json"
-	upstreamVendorsURL = "https://basellm.github.io/llm-metadata/api/newapi/vendors.json"
+	upstreamModelsURL  = "https://proxy.xiaosi.cc/basellm.github.io/llm-metadata/api/newapi/models.json"
+	upstreamVendorsURL = "https://proxy.xiaosi.cc/basellm.github.io/llm-metadata/api/newapi/vendors.json"
 )
 
 func normalizeLocale(locale string) (string, bool) {
@@ -37,7 +37,7 @@ func normalizeLocale(locale string) (string, bool) {
 }
 
 func getUpstreamBase() string {
-	return common.GetEnvOrDefaultString("SYNC_UPSTREAM_BASE", "https://basellm.github.io/llm-metadata")
+	return common.GetEnvOrDefaultString("SYNC_UPSTREAM_BASE", "https://proxy.xiaosi.cc/basellm.github.io/llm-metadata")
 }
 
 func getUpstreamURLs(locale string) (modelsURL, vendorsURL string) {
