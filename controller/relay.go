@@ -221,6 +221,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		if newAPIError == nil {
 			relayInfo.LastError = nil
+			service.RecordChannelAffinity(c, channel.Id) // 记录成功的渠道亲和性，用于 SwitchOnSuccess
 			return
 		}
 
