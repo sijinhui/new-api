@@ -802,6 +802,59 @@ func FormatClaudeResponseInfo(claudeResponse *dto.ClaudeResponse, oaiResponse *d
 	return true
 }
 
+// detectUpstreamNonClaudeError detects SSE error bodies from upstream providers that are not in Claude format.
+//
+// Background:
+// Some upstream providers (e.g. Zhipu, OpenAI-compatible proxies) return HTTP 200 with an SSE error body
+// instead of a proper HTTP error status code when rate limiting or other errors occur. For example:
+//
+//	{"error":{"code":"1302","message":"您的账户已达到速率限制"},"request_id":"..."}
+//
+// This is problematic because:
+// 1. The HTTP status is 200, so it passes the status code check in compatible_handler.go and enters the stream handler.
+// 2. When unmarshaled into dto.ClaudeResponse, the Error field is populated but Type remains empty (since the
+//    upstream format is not Claude's SSE format). The existing Claude error check only catches errors where Type is non-empty.
+// 3. Without this detection, the malformed error body is silently forwarded as an invalid SSE chunk to the client,
+//    and no error is logged.
+//
+// This function catches those cases by checking: Error is present but Type is empty.
+// It then extracts the code and message from the error object to build a proper error response.
+// Status code 429 (Too Many Requests) is returned when the code starts with "1" (a common convention for rate limit codes).
+func detectUpstreamNonClaudeError(resp *dto.ClaudeResponse) *types.NewAPIError {
+	if resp.Error == nil || resp.Type != "" {
+		return nil
+	}
+
+	errMsg := ""
+	codeStr := ""
+	if errMap, ok := resp.Error.(map[string]interface{}); ok {
+		if msg, ok := errMap["message"].(string); ok {
+			errMsg = msg
+		}
+		if code, ok := errMap["code"].(string); ok {
+			codeStr = code
+		}
+	}
+	if errMsg == "" && codeStr == "" {
+		return nil
+	}
+
+	if errMsg == "" {
+		errMsg = fmt.Sprintf("upstream error: %v", resp.Error)
+	}
+
+	statusCode := http.StatusInternalServerError
+	if strings.HasPrefix(codeStr, "1") {
+		statusCode = http.StatusTooManyRequests
+	}
+
+	return types.WithOpenAIError(types.OpenAIError{
+		Message: errMsg,
+		Type:    "upstream_error",
+		Code:    codeStr,
+	}, statusCode)
+}
+
 func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claudeInfo *ClaudeResponseInfo, data string) *types.NewAPIError {
 	var claudeResponse dto.ClaudeResponse
 	err := common.UnmarshalJsonStr(data, &claudeResponse)
@@ -811,6 +864,16 @@ func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 	}
 	if claudeError := claudeResponse.GetClaudeError(); claudeError != nil && claudeError.Type != "" {
 		return types.WithClaudeError(*claudeError, http.StatusInternalServerError)
+	}
+	// Fallback: detect upstream non-Claude-format errors (e.g. OpenAI-style SSE error body).
+	// Upstream providers sometimes return HTTP 200 with an SSE error body like:
+	//   {"error":{"code":"1302","message":"您的账户已达到速率限制"}}
+	// When this happens, the JSON unmarshal into dto.ClaudeResponse succeeds (because Error is an `any` field),
+	// but Type remains empty (since the upstream format is not Claude). Without this check, the error body
+	// would be silently forwarded to the client as an invalid SSE chunk, and no error would be logged.
+	// So we detect it here: if Error is present but Type is empty, treat it as an upstream error.
+	if newApiErr := detectUpstreamNonClaudeError(&claudeResponse); newApiErr != nil {
+		return newApiErr
 	}
 	if claudeResponse.StopReason != "" {
 		maybeMarkClaudeRefusal(c, claudeResponse.StopReason)
