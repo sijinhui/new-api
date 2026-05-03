@@ -74,6 +74,8 @@ jobs:
   macos:
     name: macOS Release
     runs-on: macos-latest
+    env:
+      NODE_OPTIONS: "--max-old-space-size=4096"
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -89,7 +91,6 @@ jobs:
       - name: Build Frontend (default)
         env:
           CI: ""
-          NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
           cd web/default
           bun install
