@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/relay/channel"
@@ -79,8 +80,39 @@ func CommonClaudeHeadersOperation(c *gin.Context, req *http.Header, info *relayc
 	model_setting.GetClaudeSettings().WriteHeaders(info.OriginModelName, req)
 }
 
+var claudeClientPassthroughHeaders = []string{
+	"X-Stainless-Arch",
+	"X-Stainless-Lang",
+	"X-Stainless-Os",
+	"X-Stainless-Package-Version",
+	"X-Stainless-Retry-Count",
+	"X-Stainless-Runtime",
+	"X-Stainless-Runtime-Version",
+	"X-Stainless-Timeout",
+	"User-Agent",
+	"X-App",
+	"Anthropic-Dangerous-Direct-Browser-Access",
+}
+
+func passClaudeClientHeaders(c *gin.Context, req *http.Header, info *relaycommon.RelayInfo) {
+	if c == nil || c.Request == nil || req == nil || info == nil {
+		return
+	}
+	if info.IsChannelTest || info.RelayFormat != types.RelayFormatClaude {
+		return
+	}
+	for _, headerName := range claudeClientPassthroughHeaders {
+		value := strings.TrimSpace(c.Request.Header.Get(headerName))
+		if value == "" {
+			continue
+		}
+		req.Set(headerName, value)
+	}
+}
+
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *relaycommon.RelayInfo) error {
 	channel.SetupApiRequestHeader(info, c, req)
+	passClaudeClientHeaders(c, req, info)
 	req.Set("x-api-key", info.ApiKey)
 	anthropicVersion := c.Request.Header.Get("anthropic-version")
 	if anthropicVersion == "" {

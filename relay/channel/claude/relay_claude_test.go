@@ -2,10 +2,15 @@ package claude
 
 import (
 	"encoding/base64"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/dto"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/types"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -206,6 +211,57 @@ func TestBuildOpenAIStyleUsageFromClaudeUsage(t *testing.T) {
 	if openAIUsage.UsageSource != "anthropic" {
 		t.Fatalf("UsageSource = %s, want anthropic", openAIUsage.UsageSource)
 	}
+}
+
+func TestSetupRequestHeaderPassesClaudeClientHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	ctx.Request.Header.Set("Content-Type", "application/json")
+	ctx.Request.Header.Set("User-Agent", "claude-cli/1.0")
+	ctx.Request.Header.Set("X-Stainless-Runtime", "node")
+	ctx.Request.Header.Set("X-App", "claude-code")
+	ctx.Request.Header.Set("Anthropic-Dangerous-Direct-Browser-Access", "true")
+	ctx.Request.Header.Set("Authorization", "Bearer client-secret")
+	ctx.Request.Header.Set("X-Api-Key", "client-secret")
+
+	info := &relaycommon.RelayInfo{
+		RelayFormat: types.RelayFormatClaude,
+		ChannelMeta: &relaycommon.ChannelMeta{ApiKey: "channel-secret"},
+	}
+	headers := http.Header{}
+
+	err := (&Adaptor{}).SetupRequestHeader(ctx, &headers, info)
+	require.NoError(t, err)
+	require.Equal(t, "claude-cli/1.0", headers.Get("User-Agent"))
+	require.Equal(t, "node", headers.Get("X-Stainless-Runtime"))
+	require.Equal(t, "claude-code", headers.Get("X-App"))
+	require.Equal(t, "true", headers.Get("Anthropic-Dangerous-Direct-Browser-Access"))
+	require.Equal(t, "channel-secret", headers.Get("X-Api-Key"))
+	require.Empty(t, headers.Get("Authorization"))
+}
+
+func TestSetupRequestHeaderSkipsClaudeClientHeadersForChannelTest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	ctx.Request.Header.Set("User-Agent", "claude-cli/1.0")
+	ctx.Request.Header.Set("X-App", "claude-code")
+
+	info := &relaycommon.RelayInfo{
+		RelayFormat:   types.RelayFormatClaude,
+		ChannelMeta:   &relaycommon.ChannelMeta{ApiKey: "channel-secret"},
+		IsChannelTest: true,
+	}
+	headers := http.Header{}
+
+	err := (&Adaptor{}).SetupRequestHeader(ctx, &headers, info)
+	require.NoError(t, err)
+	require.Empty(t, headers.Get("User-Agent"))
+	require.Empty(t, headers.Get("X-App"))
+	require.Equal(t, "channel-secret", headers.Get("X-Api-Key"))
 }
 
 func TestBuildOpenAIStyleUsageFromClaudeUsagePreservesCacheCreationRemainder(t *testing.T) {
