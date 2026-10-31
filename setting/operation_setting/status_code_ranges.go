@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/new-api/relaykit/types"
 )
 
 type StatusCodeRange struct {
@@ -30,7 +30,6 @@ var AutomaticRetryStatusCodeRanges = []StatusCodeRange{
 
 var alwaysSkipRetryStatusCodes = map[int]struct{}{
 	504: {},
-	//524: {},
 }
 
 var alwaysSkipRetryCodes = map[types.ErrorCode]struct{}{
